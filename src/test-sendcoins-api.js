@@ -1,1 +1,0 @@
-const axios = require("axios"); async function test() { console.log("测试sendcoins API..."); try { const result = await axios.post("http://localhost:3000/api/lnd/sendcoins", {address: "tb1qtest", amount: "1000"}); console.log("成功:", result.data); } catch (error) { console.log("API不存在，需要添加:", error.response?.status); } } test();

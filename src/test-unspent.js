@@ -1,1 +1,0 @@
-const axios = require("axios"); async function test() { const balance = await axios.get("http://localhost:3000/api/lnd/balance"); console.log("余额:", balance.data); const addr = await axios.get("http://localhost:3000/api/lnd/newaddress"); console.log("新地址:", addr.data); } test();
