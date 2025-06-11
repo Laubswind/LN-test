@@ -1,0 +1,258 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 用户管理表
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  passwordHash String
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联的节点配置
+  nodeConfigs    NodeConfig[]
+  // 用户操作日志
+  activityLogs   ActivityLog[]
+  
+  @@map("users")
+}
+
+// 用户角色枚举
+enum UserRole {
+  ADMIN
+  USER
+  READONLY
+}
+
+// 节点配置表
+model NodeConfig {
+  id          String  @id @default(cuid())
+  userId      String
+  nodeAlias   String
+  host        String
+  port        Int
+  network     String  @default("testnet") // mainnet, testnet, regtest
+  isDefault   Boolean @default(false)
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关联用户
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("node_configs")
+}
+
+// 通道历史记录表
+model ChannelHistory {
+  id            String        @id @default(cuid())
+  channelPoint  String        @unique
+  peerPubkey    String
+  capacity      BigInt
+  localBalance  BigInt
+  remoteBalance BigInt
+  status        ChannelStatus
+  isActive      Boolean       @default(true)
+  openHeight    Int?
+  closeHeight   Int?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // 关联的通道更新记录
+  statusUpdates ChannelStatusUpdate[]
+  
+  @@map("channel_history")
+}
+
+// 通道状态枚举
+enum ChannelStatus {
+  PENDING_OPEN
+  ACTIVE
+  PENDING_CLOSE
+  CLOSED
+  FORCE_CLOSE
+}
+
+// 通道状态更新记录
+model ChannelStatusUpdate {
+  id              String    @id @default(cuid())
+  channelHistoryId String
+  previousStatus  ChannelStatus?
+  newStatus       ChannelStatus
+  blockHeight     Int?
+  confirmations   Int?
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  // 关联通道历史
+  channelHistory  ChannelHistory @relation(fields: [channelHistoryId], references: [id], onDelete: Cascade)
+  
+  @@map("channel_status_updates")
+}
+
+// 支付记录表
+model PaymentHistory {
+  id              String        @id @default(cuid())
+  paymentHash     String        @unique
+  paymentRequest  String?
+  destination     String
+  amount          BigInt
+  fee             BigInt?
+  status          PaymentStatus
+  preimage        String?
+  failureReason   String?
+  createdAt       DateTime      @default(now())
+  completedAt     DateTime?
+
+  @@map("payment_history")
+}
+
+// 支付状态枚举
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+// 发票记录表
+model InvoiceHistory {
+  id             String        @id @default(cuid())
+  paymentHash    String        @unique
+  paymentRequest String        @unique
+  amount         BigInt
+  memo           String?
+  status         InvoiceStatus
+  isPaid         Boolean       @default(false)
+  amountPaid     BigInt?
+  createdAt      DateTime      @default(now())
+  paidAt         DateTime?
+  expiresAt      DateTime
+
+  @@map("invoice_history")
+}
+
+// 发票状态枚举
+enum InvoiceStatus {
+  OPEN
+  SETTLED
+  CANCELLED
+  ACCEPTED
+}
+
+// 余额快照表
+model BalanceSnapshot {
+  id                      String   @id @default(cuid())
+  totalBalance           BigInt
+  confirmedBalance       BigInt
+  unconfirmedBalance     BigInt
+  lockedBalance          BigInt
+  reservedBalanceAnchor  BigInt
+  channelBalance         BigInt?
+  pendingChannelBalance  BigInt?
+  timestamp              DateTime @default(now())
+
+  @@map("balance_snapshots")
+}
+
+// 交易记录表
+model TransactionHistory {
+  id            String            @id @default(cuid())
+  txid          String            @unique
+  amount        BigInt
+  fee           BigInt?
+  type          TransactionType
+  status        TransactionStatus
+  blockHeight   Int?
+  confirmations Int?
+  toAddress     String?
+  fromAddress   String?
+  memo          String?
+  createdAt     DateTime          @default(now())
+  confirmedAt   DateTime?
+
+  @@map("transaction_history")
+}
+
+// 交易类型枚举
+enum TransactionType {
+  SEND
+  RECEIVE
+  CHANNEL_OPEN
+  CHANNEL_CLOSE
+}
+
+// 交易状态枚举
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+// 系统活动日志表
+model ActivityLog {
+  id        String      @id @default(cuid())
+  userId    String?
+  action    String
+  resource  String?
+  details   String?
+  level     LogLevel    @default(INFO)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+
+  // 关联用户（可选）
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@map("activity_logs")
+}
+
+// 日志级别枚举
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+  CRITICAL
+}
+
+// 系统配置表
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  isEncrypted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+// API密钥管理表
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String
+  keyHash     String   @unique
+  permissions String   // JSON字符串存储权限数组
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("api_keys")
+}
